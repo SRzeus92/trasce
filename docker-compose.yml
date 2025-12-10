@@ -1,0 +1,88 @@
+version: '3.8'
+
+networks:
+  ft_transcendence_network:
+    driver: bridge
+
+services:
+  auth-service:
+    build: ./services/auth-service
+    # Ports exposed only for testing - remove in production
+    ports:
+      - "3002:3002"
+    env_file:
+      - .secrets
+    environment:
+      - PORT=3002
+      - DB_PATH=/app/database/auth.db
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:-your-internal-secret}
+    volumes:
+      - ./services/auth-service/database:/app/database
+    networks:
+      - ft_transcendence_network
+
+  user-service:
+    build: ./services/user-service
+    # Ports exposed only for testing - remove in production
+    ports:
+      - "3003:3003"
+    env_file:
+      - .secrets
+    environment:
+      - PORT=3003
+      - DB_PATH=/app/database/user.db
+      - INTERNAL_SECRET=${INTERNAL_SECRET:-your-internal-secret}
+    volumes:
+      - ./services/user-service/database:/app/database
+    networks:
+      - ft_transcendence_network
+
+  match-service:
+    build: ./services/match-service
+    # Ports exposed only for testing - remove in production
+    ports:
+      - "3004:3004"
+    env_file:
+      - .secrets
+    environment:
+      - PORT=3004
+      - DB_PATH=/app/database/match.db
+      - INTERNAL_SECRET=${INTERNAL_SECRET:-your-internal-secret}
+    volumes:
+      - ./services/match-service/database:/app/database
+    networks:
+      - ft_transcendence_network
+
+  game-service:
+    build: ./services/game-service
+    ports:
+      - "3000:3000"
+    env_file:
+      - .secrets
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:-your-internal-secret}
+      - AUTH_SERVICE_URL=http://auth-service:3002
+      - USER_SERVICE_URL=http://user-service:3003
+      - MATCH_SERVICE_URL=http://match-service:3004
+    volumes:
+      - ./services/game-service/public:/app/public
+    depends_on:
+      - auth-service
+      - user-service
+      - match-service
+    networks:
+      - ft_transcendence_network
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - game-service
+    networks:
+      - ft_transcendence_network
