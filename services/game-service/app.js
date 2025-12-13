@@ -23,7 +23,12 @@ export default async function (fastify, opts) {
   })
 
   await fastify.register(fastifyCors, {
-    origin: true // Allow all origins for development
+    origin: true, // Allow all origins for development
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   })
 
   await fastify.register(fastifyCookie, {
