@@ -43,7 +43,7 @@ export function renderTournament() {
     const updateInputs = () => {
       const aiCount = Math.max(0, Math.min(3, parseInt((document.getElementById('aiCount') as HTMLInputElement).value || '0', 10)));
       const extraLocalsAllowed = Math.max(0, 4 - aiCount - 1); // minus current user
-      const ids = ['p1','p2','p3','p4'];
+      const ids = ['p1', 'p2', 'p3', 'p4'];
       ids.forEach((id, idx) => {
         const el = document.getElementById(id) as HTMLInputElement | null;
         if (!el) return;
@@ -65,7 +65,7 @@ export function renderTournament() {
     document.getElementById('startTournamentBtn')?.addEventListener('click', () => {
       const aiCount = Math.max(0, Math.min(3, parseInt((document.getElementById('aiCount') as HTMLInputElement).value || '0', 10)));
       const extraLocalsAllowed = Math.max(0, 4 - aiCount - 1);
-      const visibleInputs = ['p1','p2','p3','p4']
+      const visibleInputs = ['p1', 'p2', 'p3', 'p4']
         .map((id, idx) => ({ el: document.getElementById(id) as HTMLInputElement, idx }))
         .filter(x => !!x.el && !x.el.classList.contains('hidden'))
         .slice(0, extraLocalsAllowed);
@@ -80,7 +80,7 @@ export function renderTournament() {
       const me = store.getState().currentUser || 'Player 1';
       const locals: Player[] = [{ name: me, isAI: false }, ...localNames.map(n => ({ name: n, isAI: false }))];
       const toFill = Math.max(0, 4 - locals.length);
-      const aiPlayers: Player[] = Array.from({ length: Math.min(aiCount, toFill) }, (_, i) => ({ name: `AI ${i+1}`, isAI: true }));
+      const aiPlayers: Player[] = Array.from({ length: Math.min(aiCount, toFill) }, (_, i) => ({ name: `AI ${i + 1}`, isAI: true }));
       let players: Player[] = [...locals, ...aiPlayers];
       while (players.length < 4) players.push({ name: `AI ${players.length - locals.length + 1}`, isAI: true });
       players = players.sort(() => Math.random() - 0.5);
@@ -93,7 +93,7 @@ export function renderTournament() {
   }
 
   // Bracket view
-  const [a,b,c,d] = t.players;
+  const [a, b, c, d] = t.players;
   const s1 = t.semifinalWinners[0];
   const s2 = t.semifinalWinners[1];
   const finalReady = s1 && s2;
@@ -146,15 +146,36 @@ export function renderTournament() {
       renderTournament();
       return;
     }
-    // Otherwise play a game with locked mode
-    store.setState({ gameConfig: {
-      lockedMode: p1.isAI || p2.isAI ? 'ai' : 'pvp',
-      onGameEnd: (winnerSide) => {
-        const winner = winnerSide === 'left' ? p1 : p2;
-        placeWinner(winner);
-        navigate('tournament');
+
+    // Determine who plays on which side
+    // In game.ts: left = Player 1 (human in AI mode), right = Player 2 (AI in AI mode)
+    // For PvP: left = first player, right = second player
+    // For AI mode: human is always left, AI is always right
+
+    let leftPlayer: Player, rightPlayer: Player;
+
+    if (p1.isAI || p2.isAI) {
+      // AI mode: human on left, AI on right
+      leftPlayer = p1.isAI ? p2 : p1;
+      rightPlayer = p1.isAI ? p1 : p2;
+    } else {
+      // PvP mode: p1 on left, p2 on right
+      leftPlayer = p1;
+      rightPlayer = p2;
+    }
+
+    // Play game with locked mode
+    store.setState({
+      gameConfig: {
+        lockedMode: p1.isAI || p2.isAI ? 'ai' : 'pvp',
+        playerNames: { left: leftPlayer.name, right: rightPlayer.name },
+        onGameEnd: (winnerSide) => {
+          const winner = winnerSide === 'left' ? leftPlayer : rightPlayer;
+          placeWinner(winner);
+          navigate('tournament');
+        }
       }
-    }});
+    });
     navigate('game');
   };
 

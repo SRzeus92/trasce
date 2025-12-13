@@ -2,6 +2,7 @@ import { store } from '../state/store.js';
 import { renderHeader, setupHeaderEvents } from '../components/header.js';
 import { showMessage } from '../components/message.js';
 import { navigate } from '../router.js';
+import { fetchProfileData } from '../utils/user.js';
 
 export function renderProfile() {
   const { isLoggedIn, currentUser, userAvatar, userEmail, friends, gameHistory } = store.getState();
@@ -18,6 +19,7 @@ export function renderProfile() {
           <div class="flex flex-col items-center">
             <div class="relative group">
               <img src="${userAvatar}" alt="${currentUser}" class="w-32 h-32 rounded-full border-4 border-green-500 mb-4">
+              <input type="file" id="avatarInput" accept="image/*" class="hidden">
             </div>
             <button id="uploadAvatarBtn" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded text-white text-sm">Cambia Avatar</button>
           </div>
@@ -54,12 +56,12 @@ export function renderProfile() {
         <div class="mb-6">
           <h3 class="text-xl font-bold text-white mb-4">Ultime Partite</h3>
           <div class="space-y-2 max-h-40 overflow-y-auto">
-            ${gameHistory.slice(0,3).map(g => `
-              <div class=\"bg-gray-700 p-3 rounded flex justify-between items-center\">
-                <div><span class=\"text-white\">vs ${g.opponent}</span><span class=\"text-gray-400 text-sm ml-2\">${g.date}</span></div>
-                <div class=\"flex items-center space-x-2\">
-                  <span class=\"text-white font-mono\">${g.score}</span>
-                  <span class=\"px-2 py-1 rounded text-xs ${g.result === 'Vittoria' ? 'bg-green-500' : 'bg-red-500'} text-white\">${g.result}</span>
+            ${gameHistory.slice(0, 3).map(g => `
+              <div class="bg-gray-700 p-3 rounded flex justify-between items-center">
+                <div><span class="text-white">vs ${g.opponent}</span><span class="text-gray-400 text-sm ml-2">${g.date}</span></div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-white font-mono">${g.score}</span>
+                  <span class="px-2 py-1 rounded text-xs ${g.result === 'Vittoria' ? 'bg-green-500' : 'bg-red-500'} text-white">${g.result}</span>
                 </div>
               </div>
             `).join('')}
@@ -78,19 +80,134 @@ export function renderProfile() {
     document.getElementById('usernameDisplay')?.classList.add('hidden');
     document.getElementById('usernameEdit')?.classList.remove('hidden');
   });
-  document.getElementById('saveUsernameBtn')?.addEventListener('click', () => {
+
+  document.getElementById('saveUsernameBtn')?.addEventListener('click', async () => {
     const value = (document.getElementById('usernameInput') as HTMLInputElement).value.trim();
-    if (value && value !== currentUser) {
-      store.setState({ currentUser: value });
-      showMessage('Username aggiornato con successo!', 'success');
+    const currentUser = store.getState().currentUser;
+    const userId = store.getState().currentUserId;
+
+    if (value && value !== currentUser && userId) {
+      try {
+        showMessage('Salvataggio in corso...', 'success');
+        const token = localStorage.getItem('access_token');
+
+        const res = await fetch(`/api/users/${userId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username: value })
+        });
+
+        if (res.ok) {
+          showMessage('Username aggiornato con successo!', 'success');
+          await fetchProfileData();
+          // renderProfile will be called implicitly if needed or we can just update UI
+          // Actually fetchProfileData updates store, but doesn't auto-trigger re-render.
+          // We can re-render to reflect changes.
+          renderProfile();
+        } else {
+          const err = await res.json();
+          showMessage(err.error || 'Errore aggiornamento username', 'error');
+          renderProfile(); // Restore UI state anyway
+        }
+      } catch (e: any) {
+        console.error(e);
+        showMessage(e.message || 'Errore di connessione', 'error');
+        renderProfile();
+      }
+    } else {
+      renderProfile(); // Reset valid UI if cancelled or invalid
     }
-    renderProfile();
   });
+
   document.getElementById('cancelUsernameBtn')?.addEventListener('click', () => renderProfile());
-  document.getElementById('uploadAvatarBtn')?.addEventListener('click', () => showMessage('Funzionalità upload avatar in sviluppo!'));
+
+  const fileInput = document.getElementById('avatarInput') as HTMLInputElement;
+
+  document.getElementById('uploadAvatarBtn')?.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  fileInput?.addEventListener('change', async () => {
+    if (fileInput.files && fileInput.files[0]) {
+      const file = fileInput.files[0];
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      try {
+        showMessage('Caricamento in corso...', 'success');
+        const token = localStorage.getItem('access_token');
+
+        const res = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          // Update store with new avatar immediately
+          if (data.avatar && data.avatar.data_base64) {
+            store.setState({ userAvatar: `data:${data.avatar.mimetype || 'image/jpeg'};base64,${data.avatar.data_base64}` });
+          } else if (data.avatar_url) {
+            store.setState({ userAvatar: data.avatar_url });
+          }
+
+          showMessage('Avatar aggiornato!', 'success');
+          setTimeout(() => renderProfile(), 1000); // Re-render to show new avatar properly
+        } else {
+          const data = await res.json();
+          showMessage(data.error || 'Errore upload avatar', 'error');
+        }
+      } catch (err: any) {
+        console.error(err);
+        showMessage(err.message || 'Errore di connessione', 'error');
+      }
+    }
+  });
+
   document.getElementById('backHomeFromProfileBtn')?.addEventListener('click', () => navigate('home'));
   document.getElementById('gameHistoryBtn')?.addEventListener('click', () => navigate('history'));
   document.getElementById('viewAllGamesBtn')?.addEventListener('click', () => navigate('history'));
-  setupHeaderEvents();
-}
 
+  setupHeaderEvents();
+
+  // Fetch and refresh all data
+  fetchProfileData().then(() => {
+    const state = store.getState();
+    const usernameDisplay = document.getElementById('usernameDisplay');
+    if (usernameDisplay && state.currentUser) usernameDisplay.textContent = state.currentUser;
+
+    const imgEl = document.querySelector('.group img') as HTMLImageElement;
+    if (imgEl && state.userAvatar) imgEl.src = state.userAvatar;
+
+    // Update Stats
+    const friendsCountEl = document.querySelector('.bg-gray-700 .text-green-400') as HTMLElement;
+    if (friendsCountEl && state.friends) friendsCountEl.textContent = String(state.friends.length);
+
+    const gamesCountEl = document.querySelector('.bg-gray-700 .text-blue-400') as HTMLElement;
+    if (gamesCountEl && state.gameHistory) gamesCountEl.textContent = String(state.gameHistory.length);
+
+    // Update Email
+    const emailP = document.querySelector('label + p.text-white') as HTMLElement; // Heuristic selector
+    if (emailP && state.userEmail) emailP.textContent = state.userEmail;
+
+    // Update Game History List
+    const historyContainer = document.querySelector('.space-y-2.max-h-40.overflow-y-auto');
+    if (historyContainer && state.gameHistory) {
+      historyContainer.innerHTML = state.gameHistory.slice(0, 3).map(g => `
+              <div class="bg-gray-700 p-3 rounded flex justify-between items-center">
+                <div><span class="text-white">vs ${g.opponent}</span><span class="text-gray-400 text-sm ml-2">${g.date}</span></div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-white font-mono">${g.score}</span>
+                  <span class="px-2 py-1 rounded text-xs ${g.result === 'Vittoria' ? 'bg-green-500' : 'bg-red-500'} text-white">${g.result}</span>
+                </div>
+              </div>
+            `).join('');
+    }
+  });
+}

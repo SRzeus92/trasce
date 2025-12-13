@@ -47,7 +47,18 @@ export function renderHome() {
     document.getElementById('friendsHomeBtn')?.addEventListener('click', () => navigate('friends'));
     document.getElementById('tournamentBtn')?.addEventListener('click', () => navigate('tournament'));
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
-      store.setState({ isLoggedIn: false, currentUser: '', userAvatar: '/default-avatar.png', userEmail: '' });
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user_email');
+      store.setState({
+        isLoggedIn: false,
+        currentUser: '',
+        userAvatar: '/default-avatar.png',
+        userEmail: '',
+        currentUserId: null,
+        gameHistory: [],
+        friends: [],
+        friendRequests: []
+      });
       navigate('home');
     });
     setupHeaderEvents();

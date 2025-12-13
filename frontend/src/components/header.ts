@@ -37,7 +37,18 @@ export function setupHeaderEvents() {
     menu?.classList.add('hidden');
   });
   document.getElementById('logoutHeaderBtn')?.addEventListener('click', () => {
-    store.setState({ isLoggedIn: false, currentUser: '', userAvatar: '/default-avatar.png', userEmail: '' });
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user_email');
+    store.setState({
+      isLoggedIn: false,
+      currentUser: '',
+      userAvatar: '/default-avatar.png',
+      userEmail: '',
+      currentUserId: null,
+      gameHistory: [],
+      friends: [],
+      friendRequests: []
+    });
     navigate('home');
     menu?.classList.add('hidden');
   });

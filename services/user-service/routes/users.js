@@ -16,8 +16,8 @@ export default async function (fastify) {
         id: user.id,
         username: user.username,
         // Replace avatar_url with avatar file payload
-        avatar: await getAvatarData(user.avatar_url || 'avatars/default.jpg'),
-        // Keep original field for backward compatibility (will be ignored by callers that use avatar)
+        avatar: (await getAvatarData(user.avatar_url)) || (await getAvatarData('avatars/default.jpg')),
+        // Keep original field but strictly speaking it might be broken if file is missing
         avatar_url: user.avatar_url,
         is_online: user.is_online,
         won_matches: user.won_matches,
@@ -68,7 +68,7 @@ export default async function (fastify) {
           id: user.id,
           username: user.username,
           // Provide avatar file payload instead of URL path
-          avatar: await getAvatarData(user.avatar_url || 'avatars/default.jpg'),
+          avatar: (await getAvatarData(user.avatar_url)) || (await getAvatarData('avatars/default.jpg')),
           // Backward compatibility
           avatar_url: user.avatar_url,
           won_matches: user.won_matches,
@@ -98,7 +98,7 @@ export default async function (fastify) {
     }
   })
 
-    // GET /users/:id
+  // GET /users/:id
   fastify.get('/users/:id', async (request, reply) => {
     try {
       const user = await fastify.models.User.findByPk(request.params.id, {
@@ -112,7 +112,7 @@ export default async function (fastify) {
       return reply.send({
         id: user.id,
         username: user.username,
-        avatar: await getAvatarData(user.avatar_url || 'avatars/default.jpg'),
+        avatar: (await getAvatarData(user.avatar_url)) || (await getAvatarData('avatars/default.jpg')),
         avatar_url: user.avatar_url,
         is_online: user.is_online,
         won_matches: user.won_matches,
@@ -270,7 +270,7 @@ export default async function (fastify) {
           id: relatedUser.id,
           username: relatedUser.username,
           // Provide avatar file payload instead of URL path
-          avatar: await getAvatarData(relatedUser.avatar_url),
+          avatar: (await getAvatarData(relatedUser.avatar_url)) || (await getAvatarData('avatars/default.jpg')),
           // Backward compatibility
           avatar_url: relatedUser.avatar_url,
           is_online: relatedUser.is_online,
@@ -283,7 +283,7 @@ export default async function (fastify) {
         user: {
           id: user.id,
           username: user.username,
-          avatar: await getAvatarData(user.avatar_url),
+          avatar: (await getAvatarData(user.avatar_url)) || (await getAvatarData('avatars/default.jpg')),
           avatar_url: user.avatar_url,
           is_online: user.is_online,
           won_matches: user.won_matches,

@@ -6,6 +6,7 @@ import { renderFriends } from './pages/friends.js';
 import { renderHistory } from './pages/history.js';
 import { renderGame } from './pages/game/game.js';
 import { renderTournament } from './pages/tournament.js';
+import { renderOTPVerification } from './pages/OTPVerificationPage.js';
 
 export type Route =
   | 'home'
@@ -15,9 +16,10 @@ export type Route =
   | 'friends'
   | 'history'
   | 'game'
-  | 'tournament';
+  | 'tournament'
+  | 'verify-otp';
 
-export function navigate(route: Route) {
+export function navigate(route: Route, params?: any) {
   switch (route) {
     case 'home':
       renderHome();
@@ -38,10 +40,13 @@ export function navigate(route: Route) {
       renderHistory();
       break;
     case 'game':
-      renderGame();
+      renderGame(params);
       break;
     case 'tournament':
       renderTournament();
+      break;
+    case 'verify-otp':
+      renderOTPVerification(params);
       break;
   }
 }

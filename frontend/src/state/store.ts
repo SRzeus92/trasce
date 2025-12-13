@@ -5,12 +5,17 @@ export type GameItem = { id: number; opponent: string; result: 'Vittoria' | 'Sco
 export type AppState = {
   isLoggedIn: boolean;
   currentUser: string;
+  currentUserId: number | null;
   userAvatar: string;
   userEmail: string;
   friends: Friend[];
   friendRequests: FriendRequest[];
   gameHistory: GameItem[];
-  gameConfig?: { lockedMode?: 'pvp' | 'ai'; onGameEnd?: null | ((winner: 'left'|'right', leftScore: number, rightScore: number) => void) };
+  gameConfig?: {
+    lockedMode?: 'pvp' | 'ai';
+    playerNames?: { left: string; right: string };
+    onGameEnd?: null | ((winner: 'left' | 'right', leftScore: number, rightScore: number) => void)
+  };
   tournament?: {
     players: { name: string; isAI: boolean }[]; // length 4
     round: 'semifinals' | 'final' | 'done';
@@ -24,6 +29,7 @@ class Store {
   private state: AppState = {
     isLoggedIn: false,
     currentUser: '',
+    currentUserId: null,
     userAvatar: defaultAvatar,
     userEmail: '',
     friends: [],

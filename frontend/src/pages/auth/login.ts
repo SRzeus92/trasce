@@ -33,21 +33,44 @@ export function renderLogin() {
     </div>
   `;
 
-  document.getElementById('loginForm')?.addEventListener('submit', (e) => {
+  document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = (document.getElementById('loginEmail') as HTMLInputElement).value.trim();
     const password = (document.getElementById('loginPassword') as HTMLInputElement).value.trim();
     if (!email || !password) return showMessage('Inserisci email e password!', 'error');
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return showMessage('Inserisci un\'email valida!', 'error');
-    store.setState({ isLoggedIn: true, currentUser: email.split('@')[0], userEmail: email, userAvatar: '/default-avatar.png' });
-    showMessage(`Benvenuto ${email.split('@')[0]}!`, 'success');
-    setTimeout(() => navigate('home'), 800);
+
+    try {
+      // Use API Gateway (game-service) endpoint
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        showMessage('Login riuscito. In attesa di OTP...', 'success');
+
+        if (data.userId) {
+          // Save email to localStorage for profile display
+          localStorage.setItem('user_email', email);
+          // Clear any stale registration data
+          sessionStorage.removeItem('pending_otp_user_id');
+          setTimeout(() => navigate('verify-otp', { userId: data.userId }), 1000);
+        } else {
+          showMessage('Errore: ID utente non ricevuto dal server.', 'error');
+        }
+      } else {
+        showMessage(data.error || 'Login fallito.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showMessage('Errore di connessione al server.', 'error');
+    }
   });
   document.getElementById('showRegisterBtn')?.addEventListener('click', () => navigate('register'));
   document.getElementById('googleLoginFormBtn')?.addEventListener('click', () => {
-    store.setState({ isLoggedIn: true, currentUser: 'google_user', userEmail: 'googleuser@example.com', userAvatar: '/google-avatar.png' });
-    navigate('home');
+    showMessage('Google Auth non configurato sul server.', 'error');
   });
   document.getElementById('backHomeBtn')?.addEventListener('click', () => navigate('home'));
   setupHeaderEvents();

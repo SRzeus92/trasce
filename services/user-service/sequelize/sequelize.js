@@ -14,7 +14,7 @@ export default fp(async function (fastify, opts) {
     dialect: 'sqlite',
     storage: dbPath,
     logging: false,
-    sync: { alter: true }
+    sync: { alter: false }
   })
 
   // Initialize models
@@ -49,7 +49,7 @@ export default fp(async function (fastify, opts) {
 
   // Sync database
   try {
-    await sequelize.sync({ alter: true })
+    await sequelize.sync({ alter: false })
     console.log('[user-service] Database synced successfully')
   } catch (error) {
     console.error('[user-service] Database sync error:', error)

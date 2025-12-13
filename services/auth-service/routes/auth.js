@@ -10,14 +10,14 @@ export default async function (fastify) {
   // POST /register
   fastify.post('/register', async (request, reply) => {
     const transaction = await fastify.sequelize.transaction()
-    
+
     try {
       // Sanitize input to prevent XSS
       const sanitized = sanitizeObject(request.body)
       const { username, email, password } = sanitized
 
-      
-      
+
+
       // Business Logic: Validate required fields
       if (!username || !email || !password) {
         await transaction.rollback()
@@ -51,7 +51,7 @@ export default async function (fastify) {
         transaction
       })
 
-      
+
 
       if (existingUser) {
         await transaction.rollback()
@@ -69,7 +69,7 @@ export default async function (fastify) {
         is_online: false
       }, { transaction })
 
-      
+
 
       // Generate OTP and send email for 2FA 
       const otp = Math.floor(100000 + Math.random() * 900000).toString()
@@ -78,8 +78,8 @@ export default async function (fastify) {
         code: otp,
         expires_at: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes expiry
       }, { transaction })
-      
-      
+
+
 
       if (!otp) {
         await transaction.rollback()
@@ -94,7 +94,7 @@ export default async function (fastify) {
         html: `<p>Your OTP code is: <b>${otp}</b></p>`
       })
 
-      
+
 
       await transaction.commit()
 
@@ -164,13 +164,14 @@ export default async function (fastify) {
         code: otp,
         expires_at: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes expiry
       }, { transaction })
-      
+
       if (!otp) {
         await transaction.rollback()
         return reply.code(401).send({ error: 'Invalid or expired OTP' })
       }
 
       await fastify.mailer.sendMail({
+        from: `"FT Transcendence" <ft_transcendence@libero.it>`,
         to: user.email,
         subject: 'Your OTP Code',
         text: `Your OTP code is ${otp}`
@@ -178,7 +179,10 @@ export default async function (fastify) {
 
       await transaction.commit()
 
-      return reply.send({ message: 'Logged in successfully' })
+      return reply.send({
+        message: 'Logged in successfully',
+        userId: user.id
+      })
     } catch (error) {
       await transaction.rollback()
       console.error('[login] Error:', error)
@@ -225,7 +229,7 @@ export default async function (fastify) {
       })
 
       // Sign JWT
-      
+
       const token = fastify.jwt.sign({
         userId: user.id,
         username: user.username,
@@ -241,20 +245,21 @@ export default async function (fastify) {
         where: { id: OTP.id }
       })
 
-      return reply.send({ user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        avatar_url: user.avatar_url
-      },
-      access_token: token,
-      expires_in: TOKEN_EXPIRY_HOURS * 3600
-    })
-  } catch (error) {
-    console.error('[otp/verify] Error:', error)
-    return reply.code(500).send({ error: 'OTP verification failed' })
-  }
-})
+      return reply.send({
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          avatar_url: user.avatar_url
+        },
+        access_token: token,
+        expires_in: TOKEN_EXPIRY_HOURS * 3600
+      })
+    } catch (error) {
+      console.error('[otp/verify] Error:', error)
+      return reply.code(500).send({ error: 'OTP verification failed' })
+    }
+  })
 
   // POST /logout
   fastify.post('/logout', async (request, reply) => {
@@ -267,7 +272,7 @@ export default async function (fastify) {
 
       // Invalidate session
       const deleted = await fastify.models.Session.destroy({
-        where: { 
+        where: {
           user_id: payload.userId,
           id: payload.sessionId
         }
@@ -284,11 +289,11 @@ export default async function (fastify) {
     }
   })
 
-    // GET /verify
+  // GET /verify
   fastify.get('/verify', async (request, reply) => {
     try {
       const payload = await request.jwtVerify()
-      
+
       if (!payload) {
         return reply.code(401).send({ error: 'Unauthorized' })
       }
@@ -352,7 +357,7 @@ export default async function (fastify) {
 
       try {
         const decoded = fastify.jwt.verify(token)
-        
+
         // Check if session still valid
         const session = await fastify.models.Session.findOne({
           where: {

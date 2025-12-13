@@ -64,11 +64,11 @@ async function retryWithBackoff(fn, context, retries = MAX_RETRIES, backoffMs = 
     try {
       console.log(`[Orchestration] Attempt ${attempt + 1}/${retries + 1} for ${context}`)
       const result = await fn()
-      
+
       if (attempt > 0) {
         console.log(`[Orchestration] SUCCESS ${context} succeeded on attempt ${attempt + 1}`)
       }
-      
+
       return result
     } catch (error) {
       lastError = error
@@ -87,12 +87,12 @@ async function retryWithBackoff(fn, context, retries = MAX_RETRIES, backoffMs = 
 
 export async function verifyOTP(userId, otp) {
   const context = `verifyOTP (userId: ${userId}, otp: ${otp})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetchWithTimeout(`${AUTH_SERVICE_URL}/otp/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, otp})
+      body: JSON.stringify({ userId, otp })
     })
 
     if (!response.ok) {
@@ -109,7 +109,7 @@ export async function verifyOTP(userId, otp) {
  */
 export async function syncUserToUserService(userId, username, avatarUrl) {
   const context = `syncUserToUserService (userId: ${userId})`
-  
+
   return retryWithBackoff(async () => {
     const payload = {
       id: userId,
@@ -141,7 +141,7 @@ export async function syncUserToUserService(userId, username, avatarUrl) {
  */
 export async function getUserFromAuthService(userId) {
   const context = `getUserFromAuthService (userId: ${userId})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetchWithTimeout(`${AUTH_SERVICE_URL}/internal/user/${userId}`, {
       method: 'GET',
@@ -162,7 +162,7 @@ export async function getUserFromAuthService(userId) {
  */
 export async function validateTokenWithAuthService(token) {
   const context = `validateTokenWithAuthService`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetchWithTimeout(`${AUTH_SERVICE_URL}/internal/validate-token`, {
       method: 'POST',
@@ -184,7 +184,7 @@ export async function validateTokenWithAuthService(token) {
  */
 export async function updateUserStats(userId, wonMatches, lostMatches, totalScore) {
   const context = `updateUserStats (userId: ${userId})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${USER_SERVICE_URL}/users/${userId}/stats`, {
       method: 'PUT',
@@ -210,7 +210,7 @@ export async function updateUserStats(userId, wonMatches, lostMatches, totalScor
  */
 export async function createMatch(gameData) {
   const context = `createMatch (players: ${gameData.players})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${MATCH_SERVICE_URL}/matches`, {
       method: 'POST',
@@ -232,9 +232,9 @@ export async function createMatch(gameData) {
  */
 export async function getUserMatches(userId) {
   const context = `getUserMatches (userId: ${userId})`
-  
+
   return retryWithBackoff(async () => {
-    const response = await fetch(`${MATCH_SERVICE_URL}/matches?user_id=${userId}`, {
+    const response = await fetch(`${MATCH_SERVICE_URL}/matches/user/${userId}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     })
@@ -252,7 +252,7 @@ export async function getUserMatches(userId) {
  */
 export async function getAllMatches() {
   const context = `getAllMatches`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${MATCH_SERVICE_URL}/matches`, {
       method: 'GET',
@@ -272,7 +272,7 @@ export async function getAllMatches() {
  */
 export async function getMatchById(matchId) {
   const context = `getMatchById (matchId: ${matchId})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${MATCH_SERVICE_URL}/matches/${matchId}`, {
       method: 'GET',
@@ -292,7 +292,7 @@ export async function getMatchById(matchId) {
  */
 export async function getUserFromUserService(userId) {
   const context = `getUserFromUserService (userId: ${userId})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${USER_SERVICE_URL}/users/${userId}`, {
       method: 'GET',
@@ -312,7 +312,7 @@ export async function getUserFromUserService(userId) {
  */
 export async function getAllUsers() {
   const context = `getAllUsers`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${USER_SERVICE_URL}/users`, {
       method: 'GET',
@@ -332,7 +332,7 @@ export async function getAllUsers() {
  */
 export async function getUsersWithFriendshipStatus(currentUserId) {
   const context = `getUsersWithFriendshipStatus (currentUserId: ${currentUserId})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${USER_SERVICE_URL}/users/with-friendship-status/${currentUserId}`, {
       method: 'GET',
@@ -355,19 +355,31 @@ export async function uploadUserAvatar(userId, filename, fileStreamOrBuffer, con
   const context = `uploadUserAvatar (userId: ${userId}, filename: ${filename})`
 
   return retryWithBackoff(async () => {
-    const form = new FormData()
-    // Stream directly if possible to avoid buffering
-    form.append('avatar', fileStreamOrBuffer, { filename, contentType })
+    // Convert stream to buffer
+    let buffer = fileStreamOrBuffer
+    if (typeof fileStreamOrBuffer.pipe === 'function') {
+      const chunks = []
+      for await (const chunk of fileStreamOrBuffer) {
+        chunks.push(chunk)
+      }
+      buffer = Buffer.concat(chunks)
+    }
+
+    // Convert to Base64
+    const base64Data = buffer.toString('base64')
 
     const headers = {
       ...getInternalHeaders(),
-      ...form.getHeaders()
+      'Content-Type': 'application/json'
     }
 
     const response = await fetchWithTimeout(`${USER_SERVICE_URL}/internal/users/${userId}/avatar`, {
       method: 'POST',
       headers,
-      body: form
+      body: JSON.stringify({
+        filename,
+        data_base64: base64Data
+      })
     })
 
     if (!response.ok) {
@@ -384,7 +396,7 @@ export async function uploadUserAvatar(userId, filename, fileStreamOrBuffer, con
  */
 export async function sendFriendRequest(senderId, receiverId) {
   const context = `sendFriendRequest (from: ${senderId}, to: ${receiverId})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${USER_SERVICE_URL}/friendships/request`, {
       method: 'POST',
@@ -408,7 +420,7 @@ export async function sendFriendRequest(senderId, receiverId) {
  */
 export async function acceptFriendRequest(friendshipId, userId) {
   const context = `acceptFriendRequest (friendshipId: ${friendshipId}, userId: ${userId})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${USER_SERVICE_URL}/friendships/${friendshipId}/accept`, {
       method: 'PUT',
@@ -429,7 +441,7 @@ export async function acceptFriendRequest(friendshipId, userId) {
  */
 export async function removeFriendship(friendshipId, userId) {
   const context = `removeFriendship (friendshipId: ${friendshipId}, userId: ${userId})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetch(`${USER_SERVICE_URL}/friendships/${friendshipId}`, {
       method: 'DELETE',
@@ -451,7 +463,7 @@ export async function removeFriendship(friendshipId, userId) {
  */
 export async function loginUser(email, password) {
   const context = `loginUser (email: ${email})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetchWithTimeout(`${AUTH_SERVICE_URL}/login`, {
       method: 'POST',
@@ -474,7 +486,7 @@ export async function loginUser(email, password) {
  */
 export async function registerUser(username, email, password) {
   const context = `registerUser (username: ${username})`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetchWithTimeout(`${AUTH_SERVICE_URL}/register`, {
       method: 'POST',
@@ -497,7 +509,7 @@ export async function registerUser(username, email, password) {
  */
 export async function logoutUser(token) {
   const context = `logoutUser`
-  
+
   return retryWithBackoff(async () => {
     const response = await fetchWithTimeout(`${AUTH_SERVICE_URL}/logout`, {
       method: 'POST',

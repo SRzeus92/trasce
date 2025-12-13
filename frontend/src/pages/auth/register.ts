@@ -35,24 +35,49 @@ export function renderRegister() {
     </div>
   `;
 
-  document.getElementById('registerForm')?.addEventListener('submit', (e) => {
+  document.getElementById('registerForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = (document.getElementById('registerUsername') as HTMLInputElement).value.trim();
     const email = (document.getElementById('registerEmail') as HTMLInputElement).value.trim();
     const password = (document.getElementById('registerPassword') as HTMLInputElement).value.trim();
     const confirm = (document.getElementById('registerConfirmPassword') as HTMLInputElement).value.trim();
+
     if (!username || !email || !password || !confirm) return showMessage('Tutti i campi sono obbligatori!', 'error');
     if (password.length < 6) return showMessage('La password deve essere di almeno 6 caratteri!', 'error');
     if (password !== confirm) return showMessage('Le password non coincidono!', 'error');
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return showMessage('Inserisci un\'email valida!', 'error');
-    showMessage('Registrazione completata! Ora puoi effettuare il login.', 'success');
-    setTimeout(() => navigate('login'), 1200);
+
+    try {
+      // Use API Gateway (game-service) endpoint
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password })
+      });
+
+      if (res.ok) {
+        showMessage('Registrazione completata! Controlla la tua email per l\'OTP.', 'success');
+        // Save email to localStorage for profile display
+        localStorage.setItem('user_email', email);
+        // Backend returns user object on register, store ID for OTP
+        const data = await res.json();
+        if (data.user && data.user.id) {
+          sessionStorage.setItem('pending_otp_user_id', String(data.user.id));
+          setTimeout(() => navigate('verify-otp', { userId: data.user.id }), 1500);
+        } else {
+          setTimeout(() => navigate('login'), 1500);
+        }
+      } else {
+        const data = await res.json();
+        showMessage(data.error || 'Registrazione fallita.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showMessage('Errore di connessione al server.', 'error');
+    }
   });
   document.getElementById('showLoginBtn')?.addEventListener('click', () => navigate('login'));
   document.getElementById('googleRegisterBtn')?.addEventListener('click', () => {
-    store.setState({ isLoggedIn: true, currentUser: 'google_user', userEmail: 'googleuser@example.com', userAvatar: '/google-avatar.png' });
-    navigate('home');
+    showMessage('Google Auth non configurato sul server.', 'error');
   });
   document.getElementById('backHomeBtnRegister')?.addEventListener('click', () => navigate('home'));
   setupHeaderEvents();

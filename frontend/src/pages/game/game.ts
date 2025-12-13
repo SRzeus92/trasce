@@ -4,10 +4,15 @@ import { store } from '../../state/store.js';
 
 type Mode = 'pvp' | 'ai';
 
-export function renderGame() {
+export function renderGame(params?: any) {
   if (!store.getState().isLoggedIn) return navigate('login');
   const app = document.getElementById('app');
   if (!app) return;
+
+  const cfg = store.getState().gameConfig;
+  const leftPlayerName = cfg?.playerNames?.left || 'Player 1';
+  const rightPlayerName = cfg?.playerNames?.right || 'Player 2';
+
   app.innerHTML = `
     <div class="min-h-screen bg-gray-900 flex flex-col items-center justify-center relative">
       ${renderHeader()}
@@ -25,9 +30,9 @@ export function renderGame() {
       </div>
   <div id="gameContainer" class="relative w-fit mx-auto">
       <div class="flex items-center justify-center text-white mb-2 space-x-6">
-        <div class="flex items-center space-x-2"><span class="text-sm text-gray-300">Player 1</span><span id="scoreLeft" class="text-3xl font-bold">0</span></div>
+        <div class="flex items-center space-x-2"><span class="text-sm text-gray-300">${leftPlayerName}</span><span id="scoreLeft" class="text-3xl font-bold">0</span></div>
         <div class="text-gray-500">|</div>
-        <div class="flex items-center space-x-2"><span class="text-sm text-gray-300">Player 2</span><span id="scoreRight" class="text-3xl font-bold">0</span></div>
+        <div class="flex items-center space-x-2"><span class="text-sm text-gray-300">${rightPlayerName}</span><span id="scoreRight" class="text-3xl font-bold">0</span></div>
       </div>
       <canvas id="pongCanvas" width="800" height="400" class="bg-black border-2 border-white mb-4"></canvas>
     </div>
@@ -41,7 +46,6 @@ export function renderGame() {
   const canvas = document.getElementById('pongCanvas') as HTMLCanvasElement;
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
   let mode: Mode = 'pvp';
-  const cfg = store.getState().gameConfig;
   if (cfg?.lockedMode) mode = cfg.lockedMode;
 
   const keys: Record<string, boolean> = {};
@@ -78,10 +82,44 @@ export function renderGame() {
     ball.vy = (Math.random() * 4 + 2) * (Math.random() > 0.5 ? 1 : -1);
   }
 
+  async function saveMatchResult(userScore: number, opponentScore: number, opponentName: string) {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
+
+      const endpoint = mode === 'ai' ? '/api/matches/ai' : '/api/matches';
+      const body = mode === 'ai'
+        ? { user_score: userScore, opponent_score: opponentScore }
+        : { opponent_alias: opponentName, user_score: userScore, opponent_score: opponentScore };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        console.log('Match saved successfully');
+      } else {
+        console.error('Failed to save match:', await res.text());
+      }
+    } catch (err) {
+      console.error('Error saving match:', err);
+    }
+  }
+
   function endGame(winner: 'left' | 'right') {
     if (gameOver) return;
     gameOver = true;
     cancelAnimationFrame(raf);
+
+    // Save match result to history
+    const opponentName = mode === 'ai' ? 'AI' : 'Player 2';
+    saveMatchResult(leftScore, rightScore, opponentName);
+
     // Overlay message
     const overlay = document.createElement('div');
     overlay.id = 'winOverlay';
@@ -235,7 +273,18 @@ export function renderGame() {
   });
   document.getElementById('logoutBtn2')?.addEventListener('click', () => {
     cancelAnimationFrame(raf);
-    store.setState({ isLoggedIn: false, currentUser: '', userAvatar: '/default-avatar.png', userEmail: '' });
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user_email');
+    store.setState({
+      isLoggedIn: false,
+      currentUser: '',
+      userAvatar: '/default-avatar.png',
+      userEmail: '',
+      currentUserId: null,
+      gameHistory: [],
+      friends: [],
+      friendRequests: []
+    });
     navigate('home');
   });
   setupHeaderEvents();

@@ -35,6 +35,7 @@ services:
       - INTERNAL_SECRET=${INTERNAL_SECRET:-your-internal-secret}
     volumes:
       - ./services/user-service/database:/app/database
+      - ./services/user-service/avatars:/app/avatars
     networks:
       - ft_transcendence_network
 
